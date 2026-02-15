@@ -1,0 +1,8 @@
+# Ignore the texts folder
+texts/
+
+# Ignore Python cache folders
+__pycache__/
+
+# Ignore all files with .old extension
+*.old
