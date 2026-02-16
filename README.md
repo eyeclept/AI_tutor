@@ -270,9 +270,3 @@ Design goals:
 ```
 
 ---
-
-If you want next-level refinement, I can:
-
-* Convert this into a technical design document format
-* Add a directory structure aligned to your Python template
-* Or break this into a phased engineering implementation plan with dependencies and sequencing.
