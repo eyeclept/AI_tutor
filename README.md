@@ -1,95 +1,278 @@
-# Textbook AI Summarizer & Tutor Roadmap
+Below is a refactored version of your README with a cleaner open-source structure, clearer separation of concerns, and reduced redundancy. It keeps your roadmap but presents it in a more professional and maintainable format.
 
-## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Goals & Stretch Goals](#goals--stretch-goals)
-3. [Architecture Overview](#architecture-overview)
-4. [PDF Parsing](#pdf-parsing)
-5. [Summarization](#summarization)
-6. [Quiz & Flashcard Generation](#quiz--flashcard-generation)
-7. [RAG-Based Tutor LLM](#rag-based-tutor-llm)
-8. [Flask Web UI](#flask-web-ui)
-9. [Text-to-Speech (TTS) / Speech-to-Text (STT)](#text-to-speech-tts--speech-to-text-stt)
-10. [Development Notes](#development-notes)
-11. [Next Steps](#next-steps)
+You can replace your current README with this.
 
 ---
 
-## Project Overview
+```markdown
+# Textbook Summarization & AI Tutoring System
 
-This project is an end-to-end AI pipeline for processing educational textbooks. The goal is to create a **summarization and tutoring system** that:
+A modular, local-first AI system for processing textbooks into structured study tools and interactive tutoring experiences.
 
-- Reads PDFs of textbooks
-- Generates detailed summaries for review
-- Extracts or generates quiz questions and flashcards
-- Supports interactive Q&A via a retrieval-augmented generation (RAG) pipeline
-- Optionally provides voice-based interaction using TTS/STT
-- Runs on local hardware with potential lightweight deployment on embedded devices
-
-The system is modular, allowing incremental development and experimentation with LLMs, embeddings, and AI tutoring techniques.
+Designed to run with local LLMs (e.g., Dolphin-Mistral / Dolphin-Mixtral via Ollama), this project progresses from a minimal summarization engine to a full tutoring platform with retrieval, web interface, and adaptive features.
 
 ---
 
-## Goals & Stretch Goals
+# Table of Contents
 
-**Core Goals:**
-
-- Summarize textbooks by chapter and section
-- Keep verbatim quotes for reference
-- Extract existing example questions
-- Produce structured summaries for later RAG indexing
-- Generate quizzes and flashcards automatically
-
-**Stretch Goals:**
-
-- Interactive tutoring with probing questions
-- Use LoRA/QLoRA to fine-tune LLM to adopt the tutor persona
-- Use LoRA/QLoRA to fine-tune LLM to be better at Summarization
-- Use RAG to gain info from the textbook
-- Voice-based tutoring using TTS/STT
+1. [Overview](#overview)
+2. [System Goals & Roadmap](#system-goals--roadmap)
+3. [System Architecture](#system-architecture)
+4. [Core Components](#core-components)
+5. [Data Flow](#data-flow)
+6. [Configuration Design](#configuration-design)
+7. [Design Principles](#design-principles)
+8. [Future Considerations](#future-considerations)
+9. [Next Milestones](#next-milestones)
 
 ---
 
-## Architecture Overview
+# Overview
 
-i have a chat where i am starting to have multiple questions per chat. i am splitting that off to another chat. the context is i am learning about AI concepts
-I asked it to tell me about RAG
-this is it's response:
+## Purpose
 
-RAG and How it Fits with Tutoring
+Convert textbook PDFs into:
 
-RAG = Retrieval-Augmented Generation
+- Structured summaries
+- Quizzes
+- Flashcards
+- Interactive tutoring responses
+- (Future) Adaptive long-term study support
 
-Instead of teaching the model new facts via weights, you give it the information at inference time.
+The system is built incrementally with clearly defined development stages.
 
-Ideal for tutoring with textbooks:
+---
 
-Embed textbook chunks
+# System Goals & Roadmap
 
-At runtime, retrieve relevant chunks for the student’s question
+## Alpha — Skeleton / Core
 
-Feed them as context to the LLM
+The minimal architecture required to function.
 
-This allows small models to answer questions about large textbooks without needing the model to memorize everything.
+- PDF/Text Extraction  
+- Text Chunking  
+- Chunk-Level Summarization  
+- File Management  
+- Centralized Configuration  
 
-Pros for tutoring:
+Outcome: A working pipeline that converts a PDF into structured summaries.
 
-Can dynamically use multiple textbooks or updates
+---
 
-Keeps model “lightweight”
+## MVP — Minimal Viable Product
 
-Works with smaller VRAM models
+Adds usable study features and traceability.
 
-Cons:
+- Quote Tracking (verbatim excerpts in summaries)
+- Quiz Generation
+- Flashcard Generation
 
-Model’s behavior/personality still comes from the base model; you can shape style with prompts
+Outcome: A functional study tool.
 
-💡 Best combination:
+---
 
-Use RAG for knowledge retrieval
+## Production — Full Functional System
 
-Use prompt engineering (or LoRA) for tutor persona
+Transforms the project into a tutoring platform.
 
-Optional: LoRA to bias model toward being Socratic / explanatory
+- RAG Integration (semantic retrieval)
+- LLM Tutoring Mode
+- Flask-Based WebUI
+- Text-to-Speech (TTS)
 
-answer questions i have from there.
+Outcome: Interactive tutoring system with retrieval-backed answers.
+
+---
+
+## Stretch Goals
+
+Advanced enhancements beyond core tutoring.
+
+- Speech-to-Text (STT)
+- Persistent Student Profiles / Memory
+- Multimodal AI Integration (images, diagrams, handwritten notes)
+
+Outcome: Adaptive and multimodal learning system.
+
+---
+
+## Pipe Dream
+
+Ambitious model-level enhancements.
+
+- LoRA/QLoRA Fine-Tuning
+
+Outcome: Custom-trained summarization or teaching-style model.
+
+---
+
+# System Architecture
+
+## High-Level Flow (Alpha / MVP)
+
+```
+
+PDF
+↓
+Text Extraction
+↓
+Chunking
+↓
+LLM Processing
+↓
+Saved Outputs (Summaries / Quizzes / Flashcards)
+
+```
+
+## Production Flow (with RAG)
+
+```
+
+PDF
+↓
+Extraction + Chunking
+↓
+Embeddings
+↓
+Vector Store
+↓
+Query → Retrieve Relevant Chunks
+↓
+LLM Context Injection
+↓
+Answer / Tutoring Response
+
+```
+
+Architecture is modular to allow independent evolution of:
+
+- Extraction Layer
+- Processing Layer
+- Retrieval Layer
+- Interface Layer
+- Persistence Layer
+
+---
+
+# Core Components
+
+## 1. Extraction Layer
+- PDF parsing (pdfplumber)
+- Raw text normalization
+- Future: section-aware parsing, page tracking
+
+## 2. Processing Layer
+- Chunking logic
+- Prompt templates
+- Ollama model interface
+- Output recombination
+
+## 3. Output Layer
+- Chapter summaries
+- Combined summaries
+- Quiz sets
+- Flashcard sets
+
+## 4. Retrieval Layer (Production)
+- Embedding model
+- Vector database (FAISS / Chroma / similar)
+- Top-k semantic retrieval
+- Context injection
+
+## 5. Interface Layer
+- CLI (initial)
+- Flask WebUI (Production)
+- Audio interface (TTS/STT future)
+
+---
+
+# Data Flow
+
+## Alpha Pipeline
+
+1. Load config
+2. Extract PDF text
+3. Chunk text
+4. Send chunks to LLM
+5. Save structured output
+
+## Production Tutoring Query
+
+1. Embed query
+2. Retrieve top-k relevant chunks
+3. Inject into prompt
+4. Generate grounded response
+
+---
+
+# Configuration Design
+
+Central configuration controls:
+
+- Model name
+- Chunk size
+- Output directories
+- Prompt templates
+- Embedding model (future)
+- WebUI settings (future)
+
+Design goals:
+
+- No hardcoded values
+- Easy experimentation
+- Reproducible runs
+- Versionable presets
+
+---
+
+# Design Principles
+
+- Local-first
+- Modular architecture
+- Hardware-aware
+- Extensible by design
+- Clear separation of concerns
+- Incremental complexity growth
+
+---
+
+# Future Considerations
+
+- Token-based chunking instead of character-based
+- Page-number-aware quote tracking
+- Structured JSON outputs
+- Session-based tutor prompts
+- Memory summarization compression
+- Separate embedding vs inference models
+- GPU/CPU fallback logic
+
+---
+
+# Next Milestones
+
+## Immediate (Alpha Stabilization)
+- Improve chunk boundary logic
+- Validate quote enforcement
+- Add structured logging
+- Improve summary recombination
+
+## MVP Implementation
+- Implement quiz and flashcard prompts
+- Standardize output format
+- Improve answer consistency
+
+## Production Build
+- Integrate embeddings
+- Add vector database
+- Implement RAG-backed tutoring
+- Build Flask WebUI
+- Integrate TTS
+```
+
+---
+
+If you want next-level refinement, I can:
+
+* Convert this into a technical design document format
+* Add a directory structure aligned to your Python template
+* Or break this into a phased engineering implementation plan with dependencies and sequencing.
