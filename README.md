@@ -1,10 +1,3 @@
-Below is a refactored version of your README with a cleaner open-source structure, clearer separation of concerns, and reduced redundancy. It keeps your roadmap but presents it in a more professional and maintainable format.
-
-You can replace your current README with this.
-
----
-
-```markdown
 # Textbook Summarization & AI Tutoring System
 
 A modular, local-first AI system for processing textbooks into structured study tools and interactive tutoring experiences.
