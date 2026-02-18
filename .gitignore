@@ -1,5 +1,5 @@
 # Ignore the texts folder
-texts/
+Docs/
 
 # Ignore Python cache folders
 __pycache__/

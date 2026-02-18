@@ -94,6 +94,7 @@ Outcome: Adaptive and multimodal learning system.
 Ambitious model-level enhancements.
 
 - LoRA/QLoRA Fine-Tuning
+- Activation Capping
 
 Outcome: Custom-trained summarization or teaching-style model.
 

@@ -18,16 +18,25 @@ Description:
     TODO: Chunk based on page number to allow for searching content
     TODO: add functionality to generate quizzes (with keys) and flashcards
     TODO: stretch goal: integrate it to custom LLM where the LLM acts as a teacher for the book
+    TODO: integrate with RAG
+    TODO: add more controls in ini
+    TODO: set up cli
+    TODO: set up basic webui
+    TODO: refactor file traversal to have a "get all of these files" function thet gets a list of all files with checks and what not
+            and then use that list for processing
+    TODO: add a way to specify which files to process in the ini file
+    TODO: make it so you can specify multiple input folders (and output folders)
+    TODO: make it so you can specify multiple output folders (and input folders)
 
 """
 
-from pdf2txt import (
+from processing import (
     load_pdf_config,
     pdf_to_text,
     load_parser_config,
     split_pdf_by_pages
 )
-from ask_ollama import load_ollama_config, summarize_individual, summarize_summaries
+from llm import load_llm_config, summarize_individual, summarize_summaries
 import os
 
 
@@ -68,7 +77,7 @@ def summarize_text_files():
         - Summarizes individual files if enabled
         - Summarizes combined summaries if enabled
     """
-    cfg = load_ollama_config()
+    cfg = load_llm_config()
     if cfg["summarize_individual"]:
         summarize_individual(cfg)
     if cfg["summarize_summaries"]:

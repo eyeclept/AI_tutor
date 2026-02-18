@@ -11,7 +11,7 @@ Contains modules for summarizing text files using Ollama LLM
 #imports
 
 from .askOllama import (
-    load_ollama_config,
+    load_llm_config,
     summarize_individual,
     summarize_summaries
 )

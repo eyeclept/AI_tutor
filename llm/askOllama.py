@@ -6,6 +6,7 @@ Email:  eyeclept@pm.me
 Description:
     Module for summarizing text files using Ollama LLM.
     Config-driven, supports summarizing individual files and combined summaries.
+    TODO: integrate with RAG
 """
 import re
 import os
@@ -18,28 +19,47 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 from utils.config_utils import get_section
 
-def load_ollama_config(config_file="config.ini"):
+def load_llm_config(config_file="config.ini"):
     """
     Input:      config_file (str) - path to config.ini
     Output:     dict - configuration values for ollama module
     Details:    pulls required info from the config file
     """
-    pdf_cfg = get_section("pdf", config_file)
-    ollama_cfg = get_section("ollama", config_file)
+    llm_cfg = get_section("llm", config_file)
 
-    folders_str = ollama_cfg.get("folders", "")
+    folders_str = llm_cfg.get("folders", "")
     folders = [f.strip() for f in folders_str.split(",") if f.strip()]
+
 
 
     return {
         "folders": folders,
-        "model_name": ollama_cfg.get("model_name"),
-        "chunk_size": int(ollama_cfg.get("chunk_size")),
-        "line_width": int(ollama_cfg.get("line_width")),
-        "summary_folder": ollama_cfg.get("summary_folder"),
-        "summarize_individual": ollama_cfg.get("summarize_individual").lower() == "true",
-        "summarize_summaries": ollama_cfg.get("summarize_summaries").lower() == "true",
-        "prompt_prefix": ollama_cfg.get("prompt_prefix")
+        "model_name": llm_cfg.get("model_name"),
+        "chunk_size": int(llm_cfg.get("chunk_size", 0)),
+        "line_width": int(llm_cfg.get("line_width", 80)),
+        "summary_folder": llm_cfg.get("summary_folder"),
+
+        # safer boolean parsing
+        "summarize_individual": llm_cfg.get("summarize_individual", "false").lower() == "true",
+        "summarize_summaries": llm_cfg.get("summarize_summaries", "false").lower() == "true",
+
+        # prompt fields
+        "summary_chunk_pp": llm_cfg.get("summary_chunk_pp", ""),
+        "summary_refinement_pp": llm_cfg.get("summary_refinement_pp", ""),
+        # New structured chunk options
+        "chunk_llm_options": {
+            "temperature": float(llm_cfg.get("chunk_temperature", 0.2)),
+            "top_p": float(llm_cfg.get("chunk_top_p", 0.9)),
+            "num_predict": int(llm_cfg.get("chunk_num_predict", 3072)),
+            "num_ctx": int(llm_cfg.get("chunk_num_ctx", 32768)),
+        },
+        # Refinement summarization options
+        "refine_llm_options": {
+            "temperature": float(llm_cfg.get("refine_temperature", 0.1)),
+            "top_p": float(llm_cfg.get("refine_top_p", 0.9)),
+            "num_predict": int(llm_cfg.get("refine_num_predict", 4096)),
+            "num_ctx": int(llm_cfg.get("refine_num_ctx", 32768)),
+        }
     }
 
 def get_text_files(folders):
@@ -88,29 +108,34 @@ def chunk_text(text, max_chars, overlap=500):
 
     return chunks
 
-def summarize_text(text, model, chunk_size, line_width, prompt_prefix):
+def summarize_text(text, model, cfg):
     """
-    Input:      text (str), model (str), chunk_size (int), line_width (int), prompt_prefix (str)
+    Input:      text (str), model (str), chunk_size (int), line_width (int), summary_chunk_pp (str)
     Output:     summarized and wrapped text (str)
     Details:    has ollama summerize text
     TODO: add debug flag that saves intermediate summaries
     TODO: move ollama.generate options to config.ini
     """
+    #vars
+    #cfg vars
+    model_name = cfg["model_name"]
+    chunk_size = cfg["chunk_size"]
+    line_width = cfg["line_width"]
+    summary_refinement_pp = cfg["summary_refinement_pp"]
+    summary_chunk_pp = cfg["summary_chunk_pp"]
+    chunk_options = cfg["chunk_llm_options"]
+    refine_options = cfg["refine_llm_options"]
+    #other vars
     chunks = chunk_text(text, chunk_size, overlap=500)
     summarized_chunks = []
 
     for i, chunk in enumerate(chunks, start=1):
-        prompt = f"{prompt_prefix}\n\n{chunk}"
+        prompt = f"{summary_chunk_pp}\n\n{chunk}"
         try:
             response = ollama.generate(
-                model=model,
+                model=model_name,
                 prompt=prompt,
-                options={
-                    "temperature": 0.2,
-                    "top_p": 0.9,
-                    "num_predict": 3072,
-                    "num_ctx": 32768
-                }
+                options=chunk_options
             )
         except Exception as e:
             print(f"Error summarizing chunk {i}: {e}")
@@ -124,25 +149,12 @@ def summarize_text(text, model, chunk_size, line_width, prompt_prefix):
     combined_summary = "\n\n".join(summarized_chunks)
 
     # refinement pass
-    refine_prompt = (
-        "Combine the following chunk summaries into a single coherent and detailed summary.\n\n"
-        "REQUIREMENTS:\n"
-        "1. Include multiple verbatim quotes from the source text, each at least 5 words long.\n"
-        "2. Quotes must appear exactly as written in the original text, in double quotes.\n"
-        "3. Preserve all major concepts, examples, and topics from the source.\n"
-        "4. Avoid shortening, removing, or paraphrasing important content.\n\n"
-        f"{combined_summary}"
-    )
+    refine_prompt = summary_refinement_pp + "\n\n" + combined_summary
     try:
         response = ollama.generate(
             model=model,
             prompt=refine_prompt,
-            options={
-                "temperature": 0.1,    # Even lower randomness for coherent final summary
-                "top_p": 0.9,
-                "num_predict": 4096,    # Allow longer output for merged summaries
-                "num_ctx": 32768
-            }
+            options=refine_options
         )
     except Exception as e:
         print(f"Error Combining Chunks {e}")
@@ -177,13 +189,10 @@ def summarize_individual(cfg):
     Output:     None
     Details:    
     """
+
     # vars
     folders = cfg["folders"]
-    model_name = cfg["model_name"]
-    chunk_size = cfg["chunk_size"]
-    line_width = cfg["line_width"]
     summary_folder = cfg["summary_folder"]
-    prompt_prefix = cfg["prompt_prefix"]
     # Get all text files
     text_files = get_text_files(folders)
     print(f"Found {len(text_files)} text files.")
@@ -193,7 +202,7 @@ def summarize_individual(cfg):
             text = f.read()
 
         print(f"\nProcessing '{file_path}'...")
-        final_summary = summarize_text(text, model_name, chunk_size, line_width, prompt_prefix)
+        final_summary = summarize_text(text, cfg)
 
         base_filename = os.path.basename(file_path)
         summary_filename = base_filename.replace(".txt", "_summary.txt")
@@ -204,13 +213,15 @@ def summarize_summaries(cfg):
     """
     Input:      None
     Output:     None
-    Details:    
+    Details:    disabled for later refactoring
     """
+    return
     model_name = cfg["model_name"]
     chunk_size = cfg["chunk_size"]
     line_width = cfg["line_width"]
     summary_folder = cfg["summary_folder"]
-    prompt_prefix = cfg["prompt_prefix"]
+    summary_chunk_pp = cfg["summary_chunk_pp"]
+    summary_refinement_pp = cfg["summary_refinement_pp"]
 
     # Summarize all summaries together
     summary_files = [
@@ -243,7 +254,7 @@ def summarize_summaries(cfg):
         "Remove repetitive introductions and make the text flow naturally as a single summary:\n\n"
     )
 
-    final_summary_text = summarize_text(all_text, model_name, chunk_size, line_width, combined_prompt)
+    final_summary_text = summarize_text(all_text, model_name, chunk_size, line_width, combined_prompt, summary_refinement_pp)
     save_summary(final_summary_text, "ALL_SUMMARIES_FINAL.txt", summary_folder)
 
 
