@@ -182,6 +182,7 @@ def pdf_to_markdown(input_root: str, output_root: str = None, image_root: str = 
             continue
 
         md_lines = []
+        page_md_lines = []
         seen_xrefs = set()  # prevent duplicate image extraction
 
         for page_idx, page in enumerate(doc, start=1):
@@ -193,8 +194,11 @@ def pdf_to_markdown(input_root: str, output_root: str = None, image_root: str = 
                 continue
             for b in blocks:
                 if b["type"] == 0:  # text block
-                    md_lines.extend(process_text_block(b))
+                    page_md_lines.extend(process_text_block(b))
 
+            page_md_lines = merge_consecutive_headers(page_md_lines)
+            page_md_lines = format_toc(page_md_lines)
+            md_lines.extend(page_md_lines)
             # Extract images
             image_list = page.get_images(full=True)
             for img in image_list:
@@ -267,8 +271,12 @@ def process_text_block(block: dict) -> list[str]:
             line_text += text
         if not line_text:
             continue
-        # table of contents merge logic
-
+        # setting bullet points
+        bullet_chars = ["■", "•", "·", "◦"]
+        for b in bullet_chars:
+            if line_text.startswith(b):
+                line_text = "- " + line_text[len(b):].lstrip()
+                break
         
         # Heading detection
         size = line["spans"][0]["size"]
@@ -291,8 +299,65 @@ def process_text_block(block: dict) -> list[str]:
             else:
                 md_lines.append(cur_strip)
 
-
     return md_lines
+
+def format_toc(md_lines: list[str]) -> list[str]:
+    """
+    Detects numbered lines (like 1.1, 1.2, etc.) and formats as bullets or indented items.
+    Example:
+        1.1Professional software development
+    Becomes:
+        - 1.1 Professional software development
+    """
+    formatted_lines = []
+    for line in md_lines:
+        stripped = line.strip()
+        # Detect numbered section at start
+        match = re.match(r'^(\d+(\.\d+)*)\s*(.*)', stripped)
+        if match:
+            number = match.group(1)
+            text = match.group(3)
+            formatted_lines.append(f"- {number} {text}")
+        else:
+            formatted_lines.append(line)
+    return formatted_lines
+
+def merge_consecutive_headers(md_lines: list[str]) -> list[str]:
+    """
+    Merge consecutive Markdown header lines into a single header.
+    Example:
+        # 1
+        # Introduction
+        # to Software
+        # Engineering
+    Becomes:
+        # 1 Introduction to Software Engineering
+    """
+    merged_lines = []
+    buffer = []
+
+    for line in md_lines:
+        if line.startswith("#"):
+            level = line.count("#")
+            text = line.lstrip("#").strip()
+            if buffer and buffer_level == level:
+                buffer.append(text)
+            else:
+                if buffer:
+                    merged_lines.append(f"{'#'*buffer_level} {' '.join(buffer)}")
+                buffer = [text]
+                buffer_level = level
+        else:
+            if buffer:
+                merged_lines.append(f"{'#'*buffer_level} {' '.join(buffer)}")
+                buffer = []
+            merged_lines.append(line)
+
+    # catch any remaining headers in buffer
+    if buffer:
+        merged_lines.append(f"# {' '.join(buffer)}")
+
+    return merged_lines
 
 def process_image_xref(doc, xref: int, page_idx: int, base_part: str, image_root: str, output_root: str) -> list[str]:
     """
