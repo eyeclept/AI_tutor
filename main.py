@@ -32,40 +32,14 @@ Description:
 
 from processing import (
     load_pdf_config,
-    pdf_to_text,
+    pdf_to_markdown,
     load_parser_config,
-    split_pdf_by_pages
+    process_pdfs
 )
 from llm import load_llm_config, summarize_individual, summarize_summaries
 import os
 
 
-def process_pdfs(input_root, output_root, split_pages):
-    """
-    Step 3: Process PDFs
-    Input:
-        input_root (str) - folder containing original PDFs
-        output_root (str) - folder to save extracted text
-        split_pages (list of int) - pages to split PDFs at
-    Output: None
-    Details:
-        - If split_pages are defined, split PDFs first
-        - Convert PDFs (or split PDFs) to text
-    """
-    os.makedirs(output_root, exist_ok=True)
-
-    if split_pages:
-        if os.path.isfile(input_root):
-            # Just one PDF
-            split_pdf_by_pages(input_root, output_root, split_pages)
-        elif os.path.isdir(input_root):
-            for dirpath, _, filenames in os.walk(input_root):
-                for filename in filenames:
-                    if filename.lower().endswith(".pdf"):
-                        pdf_path = os.path.join(dirpath, filename)
-                        split_pdf_by_pages(pdf_path, output_root, split_pages)
-        else:
-            raise ValueError(f"{input_root} does not exist or is not a folder/file")
 
 def summarize_text_files():
     """
@@ -100,10 +74,10 @@ def main():
     process_pdfs(input_root, split_output_dir, split_pages)
 
     # Step 4: Convert to text
-    pdf_to_text(split_output_dir, text_output_dir)
+    pdf_to_markdown(split_output_dir, text_output_dir)
 
     # Step 4: Summarize text using Ollama
-    summarize_text_files()
+    #summarize_text_files()
 
     print("\nProcessing complete.")
 
