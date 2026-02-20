@@ -8,6 +8,7 @@ Description:
     Uses configuration from config.ini.
 """
 import fitz  # PyMuPDF
+import unicodedata
 import os
 import re
 import sys
@@ -248,56 +249,56 @@ def process_text_block(block: dict) -> list[str]:
     """
     Converts a PyMuPDF text block into Markdown lines.
     Preserves basic formatting (bold, italic) and simple headings based on font size.
-    
-    Input:
-        block (dict) - a PyMuPDF block with type==0
-    Output:
-        List of Markdown lines extracted from the block
     """
-    raw_lines = []
     md_lines = []
-    # extract lines
+    bullet_chars = ["■", "•", "·", "◦"]
+
     for line in block["lines"]:
         line_text = ""
+
+        # --- Extract spans ---
         for span in line["spans"]:
-            text = span.get("text", "").strip()
-            if not text:
+            text = span.get("text", "")
+            text = unicodedata.normalize("NFKC", text)
+
+            if not text.strip():
                 continue
+
             # Formatting
             if span.get("flags", 0) & 2:  # bold
                 text = f"**{text}**"
             if span.get("flags", 0) & 1:  # italic
                 text = f"*{text}*"
+
             line_text += text
+
+        line_text = line_text.strip()
         if not line_text:
             continue
-        # setting bullet points
-        bullet_chars = ["■", "•", "·", "◦"]
+
+        # --- Bullet normalization ---
         for b in bullet_chars:
             if line_text.startswith(b):
                 line_text = "- " + line_text[len(b):].lstrip()
                 break
-        
-        # Heading detection
+
+        # --- Heading detection ---
         size = line["spans"][0]["size"]
         if size >= 16:
-            raw_lines.append(f"# {line_text}")
+            formatted_line = f"# {line_text}"
         elif size >= 13:
-            raw_lines.append(f"## {line_text}")
+            formatted_line = f"## {line_text}"
         else:
-            raw_lines.append(line_text)
-        # merge numeric only lines (table of content)
-        for cur in raw_lines:
-            cur_strip = cur.strip()
-            # Detect numeric-only content (after removing heading markers)
-            numeric_only = re.sub(r'^#+\s*', '', cur_strip).isdigit()
-            if numeric_only and md_lines:
-                # Attach numeric to previous line (preserve previous heading markers)
-                prev = md_lines.pop()
-                merged = f"{prev} {cur_strip.split()[-1]}"  # append just the number
-                md_lines.append(merged)
-            else:
-                md_lines.append(cur_strip)
+            formatted_line = line_text
+
+        # --- Merge numeric-only lines (e.g., page numbers / TOC artifacts) ---
+        stripped = re.sub(r'^#+\s*', '', formatted_line).strip()
+
+        if stripped.isdigit() and md_lines:
+            prev = md_lines.pop()
+            md_lines.append(f"{prev} {stripped}")
+        else:
+            md_lines.append(formatted_line)
 
     return md_lines
 
