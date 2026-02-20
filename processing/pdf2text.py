@@ -10,7 +10,7 @@ Description:
 
 import os
 import pdfplumber
-from utils.config_utils import get_section
+from utils.config_utils import load_processing_config
 
 
 def load_pdf_config(config_file="config.ini"):
@@ -22,9 +22,9 @@ def load_pdf_config(config_file="config.ini"):
                     - split_output_dir: folder to store split PDFs
                     - text_output_dir: folder to store extracted text
     """
-    pdf_cfg = get_section("pdf", config_file)
+    pdf_cfg = load_processing_config(config_file)
 
-    input_pdf = pdf_cfg.get("input_pdf")
+    input_pdf = pdf_cfg.get("input_pdf_dir")
     if not input_pdf:
         raise ValueError("input_pdf must be set in [pdf] section of config.ini")
 

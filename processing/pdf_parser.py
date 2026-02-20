@@ -13,7 +13,7 @@ Description:
 import os
 import pdfplumber
 from pypdf import PdfReader, PdfWriter
-from utils.config_utils import get_section
+from utils.config_utils import load_processing_config
 
 
 def load_parser_config(config_file="config.ini"):
@@ -33,10 +33,10 @@ def load_parser_config(config_file="config.ini"):
         - Provides a default output folder if none is specified
     """
     # Get the [pdf] section as a dictionary
-    pdf_cfg = get_section("pdf", config_file)
+    pdf_cfg = load_processing_config(config_file)
 
     # Path to the PDF to split
-    input_pdf = pdf_cfg.get("input_pdf")
+    input_pdf = pdf_cfg.get("input_pdf_dir")
 
     # Output folder for split PDFs (default to ./pdf_split_output if not specified)
     split_output_dir = pdf_cfg.get("split_output_dir", "./pdf_split_output")

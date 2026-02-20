@@ -43,3 +43,11 @@ def get_section(section_name, config_file="config.ini"):
     if section_name not in config:
         raise ValueError(f"Section '{section_name}' not found in config.")
     return dict(config[section_name])
+def load_processing_config(config_file="config.ini"):
+    """
+
+    Input:      ConfigParser object
+    Output:     processing sub object as a dictionary
+    Details:    Reads the [processing] section from config.ini and returns it as a dictionary.
+    """
+    return get_section("processing", config_file)

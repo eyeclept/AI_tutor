@@ -6,7 +6,6 @@ Email:  eyeclept@pm.me
 Description:
     Module for summarizing text files using Ollama LLM.
     Config-driven, supports summarizing individual files and combined summaries.
-    TODO: integrate with RAG
 """
 import re
 import os
