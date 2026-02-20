@@ -9,6 +9,8 @@ Description:
 """
 import fitz  # PyMuPDF
 import os
+import re
+import sys
 from utils.config_utils import load_processing_config
 
 
@@ -25,7 +27,7 @@ def load_pdf_config(config_file="config.ini"):
 
     input_pdf = pdf_cfg.get("input_pdf_dir")
     if not input_pdf:
-        raise ValueError("input_pdf must be set in [pdf] section of config.ini")
+        raise ValueError("input_pdf must be set in [processing] section of config.ini")
 
     split_output_dir = pdf_cfg.get("split_output_dir", "./pdf_split_output")
     text_output_dir = pdf_cfg.get("text_output_dir", "./pdf_text_output")
@@ -153,76 +155,88 @@ def pdf_to_markdown(input_root: str, output_root: str = None, image_root: str = 
     if not image_root:
         image_root = os.path.join(output_root, "images")
     os.makedirs(image_root, exist_ok=True)
-    # walk through all pdfs in input_root
+    # count all pdf files
+    # count all PDFs first
+    pdf_files = {}
     for dirpath, _, filenames in os.walk(input_root):
         for filename in filenames:
-            # check if pdf
             if filename.lower().endswith(".pdf"):
-                pdf_path = os.path.join(dirpath, filename)
-                # extract filename info
-                base_part, split_type, page_number = parse_pdf_filename(filename)
+                pdf_files[filename] = dirpath
 
-                # Open PDF and extract structured text & images
-                try:
-                    doc = fitz.open(pdf_path)
-                except Exception as e:
-                    print(f"Error opening PDF {pdf_path}: {e}")
+    total_pdfs = len(pdf_files)
+    processed = 0
+    # walk through all pdfs in input_root
+    for filename, dirpath in pdf_files.items():
+        pdf_path = os.path.join(dirpath, filename)
+        # extract filename info
+        base_part, split_type, page_number = parse_pdf_filename(filename)
+
+        # Open PDF and extract structured text & images
+        try:
+            doc = fitz.open(pdf_path)
+        except Exception as e:
+            print(f"Error opening PDF {pdf_path}: {e}")
+
+            processed += 1
+            print_progress_bar(processed, total_pdfs)
+            continue
+
+        md_lines = []
+        seen_xrefs = set()  # prevent duplicate image extraction
+
+        for page_idx, page in enumerate(doc, start=1):
+            # Extract text blocks (dict) to detect formatting
+            try:
+                blocks = page.get_text("dict")["blocks"]
+            except Exception as e:
+                print(f"Error extracting page {page_idx} from {pdf_path}: {e}")
+                continue
+            for b in blocks:
+                if b["type"] == 0:  # text block
+                    md_lines.extend(process_text_block(b))
+
+            # Extract images
+            image_list = page.get_images(full=True)
+            for img in image_list:
+                xref = img[0]
+
+                # avoid saving duplicates
+                if xref in seen_xrefs:
                     continue
+                seen_xrefs.add(xref)
 
-                md_lines = []
-                seen_xrefs = set()  # prevent duplicate image extraction
-
-                for page_idx, page in enumerate(doc, start=1):
-                    # Extract text blocks (dict) to detect formatting
-                    try:
-                        blocks = page.get_text("dict")["blocks"]
-                    except Exception as e:
-                        print(f"Error extracting page {page_idx} from {pdf_path}: {e}")
-                        continue
-                    for b in blocks:
-                        if b["type"] == 0:  # text block
-                            md_lines.extend(process_text_block(b))
-
-                    # Extract images
-                    image_list = page.get_images(full=True)
-                    for img in image_list:
-                        xref = img[0]
-
-                        # avoid saving duplicates
-                        if xref in seen_xrefs:
-                            continue
-                        seen_xrefs.add(xref)
-
-                        md_lines.extend(
-                            process_image_xref(
-                                doc,
-                                xref,
-                                page_idx,
-                                base_part,
-                                image_root,
-                                output_root,
-                            )
-                        )
+                md_lines.extend(
+                    process_image_xref(
+                        doc,
+                        xref,
+                        page_idx,
+                        base_part,
+                        image_root,
+                        output_root,
+                    )
+                )
 
 
-                if not md_lines:
-                    print(f"----- No selectable text or images in {pdf_path}")
-                    continue
+        if not md_lines:
+            print(f"----- No selectable text or images in {pdf_path}")
+            continue
 
-                # Preserve folder structure
-                md_dir = get_text_output_dir(output_root, base_part, dirpath, input_root)
-                md_filename = os.path.splitext(filename)[0] + ".md"
-                md_path = os.path.join(md_dir, md_filename)
+        # Preserve folder structure
+        md_dir = get_text_output_dir(output_root, base_part, dirpath, input_root)
+        md_filename = os.path.splitext(filename)[0] + ".md"
+        md_path = os.path.join(md_dir, md_filename)
 
-                # Header line
-                header_line = f"<-- {split_type} {page_number} of {base_part} -->\n\n"
+        # Header line
+        header_line = f"<-- {split_type} {page_number} of {base_part} -->\n\n"
 
-                # Write Markdown file
-                with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(header_line)
-                    f.write("\n\n".join(md_lines))
+        # Write Markdown file
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(header_line)
+            f.write("\n\n".join(md_lines))
 
-                print(f"Converted: {pdf_path} -> {md_path}")
+        processed += 1
+        print_progress_bar(processed, total_pdfs)
+        
 
     print("All PDFs converted to Markdown with images.")
 
@@ -266,19 +280,19 @@ def process_text_block(block: dict) -> list[str]:
             raw_lines.append(line_text)
         # merge numeric only lines (table of content)
         for cur in raw_lines:
-            cur = cur.strip()
-        if cur.isdigit() and md_lines:
-            # Attach to previous line
-            prev = md_lines.pop()
-            merged = f"{prev} — {cur}"
-            md_lines.append(merged)
-        else:
-            md_lines.append(cur)
+            cur_strip = cur.strip()
+            # Detect numeric-only content (after removing heading markers)
+            numeric_only = re.sub(r'^#+\s*', '', cur_strip).isdigit()
+            if numeric_only and md_lines:
+                # Attach numeric to previous line (preserve previous heading markers)
+                prev = md_lines.pop()
+                merged = f"{prev} {cur_strip.split()[-1]}"  # append just the number
+                md_lines.append(merged)
+            else:
+                md_lines.append(cur_strip)
 
 
     return md_lines
-
-
 
 def process_image_xref(doc, xref: int, page_idx: int, base_part: str, image_root: str, output_root: str) -> list[str]:
     """
@@ -320,3 +334,77 @@ def process_image_xref(doc, xref: int, page_idx: int, base_part: str, image_root
         print(f"Error extracting image xref {xref} from page {page_idx}: {e}")
 
     return md_lines
+
+def merge_md_file(md_file_root, base_dir):
+    """
+    Input: filepath containing md files
+    Output: bool for if file was created
+    Details: Placeholder
+    """
+    # vars
+    md_output_path = ""
+    # check if file path exits
+    # walk through all pdfs in input_root
+    for dirpath, _, filenames in os.walk(md_file_root):
+        for filename in filenames:
+            # check if md
+            if filename.lower().endswith(".md"):
+                #full path to current md file
+                md_page_path = os.path.join(dirpath, filename)
+                # extract filename info
+                base_part, split_type, page_number = parse_pdf_filename(filename)
+                md_output_name = base_part + ".md"
+                md_output_path = os.path.join(base_dir, md_output_name)
+                #check if output md file exists, if not make it
+                if not os.path.exists(md_output_path):                
+                    with open(md_output_path, 'w') as f:
+                        pass  # empty file created
+                #append file contents to output_md
+                with open(md_output_path, 'a') as output_md:
+                    #open filename and append contents
+                    with open(md_page_path, 'r') as input_file:
+                        output_md.write(input_file.read())
+                        output_md.write("\n\n")  # separate pages
+                #TODO this will keep appending if you run the same files again, need to make so it won't repeat
+    #check if file was created
+    return (md_output_path == True)
+
+def merge_md_files(input_dir):
+    """
+    Input: input dir where md file folders are
+    Output: None
+    Details: Placeholder
+    """
+
+    for dirpath, dirnames, _ in os.walk(input_dir):
+        # for each folder run merge_md_file(md_file_root)
+        for dirname in dirnames:
+            dir = os.path.join(input_dir, dirname)
+            if merge_md_file(dir, input_dir):
+                print(f"merged {dirname} to {dir}.md")
+    return
+
+def function():
+    """
+    Input: None
+    Output: None
+    Details: Placeholder
+    """
+    return
+
+def print_progress_bar(current, total, bar_length=40):
+    """
+    Input: 
+        current: how many items have been processed
+        total: total items to process
+        bar_length: number of characters for the bar
+    Output: None
+    Details: 
+    Prints a progress bar in terminal.
+    """
+    fraction = current / total
+    filled_length = int(bar_length * fraction)
+    bar = "█" * filled_length + "-" * (bar_length - filled_length)
+    percent = fraction * 100
+    sys.stdout.write(f"\rProcessing PDFs: |{bar}| {percent:.1f}% ({current}/{total})")
+    sys.stdout.flush()
