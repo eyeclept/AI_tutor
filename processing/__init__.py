@@ -7,7 +7,7 @@ Description:
     pdf package
     Contains modules for PDF processing
 """
-from .pdf2text import load_pdf_config, pdf_to_text, pdf_to_markdown, merge_md_files
+from .pdf2text import load_pdf_config, pdf_to_text, pdf_to_markdown, merge_md_files, split_book_by_chapter
 from .pdf_parser import load_parser_config, split_pdf, process_pdfs
 
 __all__ = [
@@ -17,5 +17,6 @@ __all__ = [
     "split_pdf",
     "process_pdfs",
     "pdf_to_markdown",
-    "merge_md_files"
+    "merge_md_files", 
+    "split_book_by_chapter"
 ]

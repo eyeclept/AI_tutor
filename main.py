@@ -35,7 +35,8 @@ from processing import (
     pdf_to_markdown,
     load_parser_config,
     process_pdfs,
-    merge_md_files
+    merge_md_files,
+    split_book_by_chapter
 )
 from llm import load_llm_config, summarize_individual, summarize_summaries
 
@@ -71,14 +72,15 @@ def main():
     split_pages = load_parser_config()["split_pages"]
 
     # Step 3: Process PDFs
-    process_pdfs(input_root, split_output_dir, split_pages)
+    #process_pdfs(input_root, split_output_dir, split_pages)
 
     # Step 4: Convert to text
     pdf_to_markdown(split_output_dir, text_output_dir)
-    merge_md_files(text_output_dir)
+    outputDirs = merge_md_files(text_output_dir, "pages")
 
-    # Step 4: Summarize text using Ollama
-    #summarize_text_files()
+    # split by chapter
+    first_working_dir, first_dirname = outputDirs[0]
+    split_book_by_chapter(first_working_dir, first_dirname)
 
     print("\nProcessing complete.")
 
